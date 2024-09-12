@@ -1,0 +1,70 @@
+#!/bin/bash
+# Update the package list and install necessary dependencies
+sudo dnf update -y
+sudo dnf install git python3-pip nginx -y
+
+# Clone your GitHub repository (replace with your GitHub repository URL)
+cd /home/ec2-user
+git clone https://github.com/sainath-web/Next_gen.git
+
+# Navigate to your project directory
+cd Next_gen
+
+# Set up a Python virtual environment
+python3 -m venv venv
+source venv/bin/activate
+
+# Install the required Python packages
+pip install -r requirements.txt
+
+# Install Gunicorn (production WSGI server for Flask)
+pip install gunicorn
+
+# Update Nginx main configuration to forward requests to Gunicorn
+sudo tee /etc/nginx/nginx.conf > /dev/null <<EOL
+user nginx;
+worker_processes auto;
+error_log /var/log/nginx/error.log;
+pid /run/nginx.pid;
+
+events {
+    worker_connections 1024;
+}
+
+http {
+    log_format  main  '\$remote_addr - \$remote_user [\$time_local] "\$request" '
+                      '\$status \$body_bytes_sent "\$http_referer" '
+                      '"\$http_user_agent" "\$http_x_forwarded_for"';
+
+    access_log  /var/log/nginx/access.log  main;
+
+    sendfile            on;
+    tcp_nopush          on;
+    tcp_nodelay         on;
+    keepalive_timeout   65;
+    types_hash_max_size 4096;
+
+    include             /etc/nginx/mime.types;
+    default_type        application/octet-stream;
+
+    # Setup for Flask Gunicorn app
+    server {
+        listen 80;
+        server_name _;
+
+        location / {
+            proxy_pass http://127.0.0.1:5000;
+            proxy_set_header Host \$host;
+            proxy_set_header X-Real-IP \$remote_addr;
+            proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto \$scheme;
+        }
+    }
+}
+EOL
+
+# Restart Nginx to apply the new configuration
+sudo systemctl restart nginx
+
+# Run the Flask application using Gunicorn
+gunicorn --workers 3 --bind 0.0.0.0:5000 Next_gen:app &
