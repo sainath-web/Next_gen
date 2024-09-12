@@ -1,0 +1,43 @@
+#!/bin/bash
+# Update the package list and install necessary dependencies
+sudo yum update -y
+sudo amazon-linux-extras install postgresql15 -y
+sudo yum install postgresql15-server postgresql15-contrib -y
+
+# Initialize PostgreSQL database
+sudo postgresql-setup --initdb
+
+# Start and enable PostgreSQL to run on boot
+sudo systemctl start postgresql
+sudo systemctl enable postgresql
+
+# Set up PostgreSQL to allow remote connections
+sudo sed -i "s/#listen_addresses = 'localhost'/listen_addresses = '*'/g" /var/lib/pgsql/data/postgresql.conf
+echo "host    all             all             0.0.0.0/0            md5" | sudo tee -a /var/lib/pgsql/data/pg_hba.conf
+
+# Restart PostgreSQL to apply changes
+sudo systemctl restart postgresql
+
+#switch to postgres user
+sudo -i -u postgres
+
+
+# Set up a database and user (run these commands as the ec2-user)
+sudo -u postgres psql -c "CREATE DATABASE Next_gen;"
+sudo -u postgres psql -c "CREATE USER postgres WITH PASSWORD '9652';"
+sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE Next_gen TO postgres;"
+
+# Set up a database and user (run these commands as the postgres user)
+#psql -c "CREATE DATABASE Next_gen;"
+#psql -c "CREATE USER postgres WITH PASSWORD '9652';"
+#psql -c "GRANT ALL PRIVILEGES ON DATABASE Next_gen TO postgres;"
+
+# switch back to the ec2-user
+#exit
+
+#To check the logs in ec2
+#cat /var/log/cloud-init-output.log
+
+#sudo -u postgres psql -c "\l"  # List databases
+#sudo -u postgres psql -c "\du"  # List users/roles
+
